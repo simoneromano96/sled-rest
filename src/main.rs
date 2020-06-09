@@ -58,32 +58,20 @@ async fn create_or_update_value(
     data: web::Data<Arc<AppData>>,
     body: Bytes,
 ) -> impl Responder {
-    // Get a reference to our "DB"
-    let db: Db = data.db.clone();
-    // From Bytes to bytes, duh
-    let value: &[u8] = body.as_ref();
-    // Simply put stuff into DB, this could be anything and there is no need to deserialize it
-    db.insert(key.clone(), value).unwrap();
+    // Simply put stuff into DB
+    data.db.insert(key.clone(), body.as_ref()).unwrap();
     // Send back the body for confirmation
     HttpResponse::Ok().body(body)
 }
 
 #[actix_web::get("/{key}")]
 async fn read_value(key: web::Path<String>, data: web::Data<Arc<AppData>>) -> impl Responder {
-    let db: Db = data.db.clone();
-    // Key from String to bytes
-    let key_vec = key.clone().into_bytes();
     // Get result
-    let result = db.get(key_vec).unwrap();
-
+    let result = data.db.get(key.as_bytes()).unwrap();
     // If has result
     if let Some(value) = result {
-        // Get that thing as bytes vec (HttpResponse wants ownership of the var)
-        // This will allocate some memory but at least it will avoid serialization and deserialization
-        // Also why should I deserialize stuff from my DB? It must be clean (should be?)
-        let response = value.to_vec();
-        // Send it back as that thing
-        HttpResponse::Ok().body(response)
+        // Send back the result
+        HttpResponse::Ok().body(value.to_vec())
     } else {
         // Not found
         HttpResponse::NotFound().body(format!("Key {:?} not found", key))
@@ -92,17 +80,12 @@ async fn read_value(key: web::Path<String>, data: web::Data<Arc<AppData>>) -> im
 
 #[actix_web::delete("/{key}")]
 async fn delete_value(key: web::Path<String>, data: web::Data<Arc<AppData>>) -> impl Responder {
-    let db: Db = data.db.clone();
-    // Key from String to bytes
-    let key_vec = key.clone().into_bytes();
     // Get result
-    let result = db.remove(key_vec).unwrap();
+    let result = data.db.remove(key.as_bytes()).unwrap();
     // If has result
     if let Some(value) = result {
-        // Get that thing as bytes vec (HttpResponse wants ownership of the var)
-        let response = value.to_vec();
-        // Send it back as that thing
-        HttpResponse::Ok().body(response)
+        // Send back the result
+        HttpResponse::Ok().body(value.to_vec())
     } else {
         // Not found
         HttpResponse::NotFound().body(format!("Key {:?} not found", key))
@@ -111,9 +94,7 @@ async fn delete_value(key: web::Path<String>, data: web::Data<Arc<AppData>>) -> 
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
-    // basic(db.clone()).unwrap();
-    // println!("{:?}", db);
-
+    // Create AppData with the DB
     let data: Arc<AppData> = Arc::new(AppData {
         db: init_db().unwrap(),
     });
