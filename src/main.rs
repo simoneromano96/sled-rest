@@ -32,11 +32,27 @@ async fn create_collection(
 ) -> impl Responder {
     let collections = data.db.get("collections").unwrap();
     if let Some(value) = collections {
-        HttpResponse::Ok().body("something")
+        // This is REALLY bad, REALLY REALLY bad
+        let mut deserialized_collections: Vec<Collection> =
+            serde_json::from_slice(value.as_ref()).unwrap();
+
+        deserialized_collections.push(json.into_inner());
+
+        let serialized: String = serde_json::to_string(&deserialized_collections).unwrap();
+
+        let result: sled::IVec = data
+            .db
+            .insert("collections", serialized.as_bytes())
+            .unwrap()
+            .unwrap();
+
+        HttpResponse::Ok().body(result.to_vec())
     } else {
         let collection = [json.into_inner()];
         let serialized: String = serde_json::to_string(&collection).unwrap();
-        data.db.insert("collections", serialized.as_bytes()).unwrap();
+        data.db
+            .insert("collections", serialized.as_bytes())
+            .unwrap();
         HttpResponse::Ok().body(serialized)
     }
 }
@@ -105,6 +121,8 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .data(data.clone())
+            .service(create_collection)
+            .service(get_collections)
             .service(create_or_update_value)
             .service(read_value)
             .service(delete_value)
