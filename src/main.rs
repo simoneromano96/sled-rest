@@ -3,6 +3,8 @@ use actix_web::{
     Result as HttpResult,
 };
 use bytes::Bytes;
+use serde::{Deserialize, Serialize};
+use serde_json;
 use sled::{Config, Db, Result};
 use std::sync::Arc;
 
@@ -10,39 +12,10 @@ struct AppData {
     db: Db,
 }
 
-// Just for reference
-/*
-fn basic(db: Db) -> Result<()> {
-    let k = b"k".to_vec();
-    let v1 = b"v1".to_vec();
-    let v2 = b"v2".to_vec();
-
-    // set and get
-    db.insert(k.clone(), v1.clone())?;
-    assert_eq!(db.get(&k).unwrap().unwrap(), (v1.clone()));
-
-    // compare and swap
-    match db.compare_and_swap(k.clone(), Some(&v1.clone()), Some(v2.clone()))? {
-        Ok(()) => println!("it worked!"),
-        Err(sled::CompareAndSwapError {
-            current: cur,
-            proposed: _,
-        }) => println!("the actual current value is {:?}", cur),
-    }
-
-    // scan forward
-    let mut iter = db.range(k.as_slice()..);
-    let (k1, v1) = iter.next().unwrap().unwrap();
-    assert_eq!(v1, v2.clone());
-    assert_eq!(k1, k.clone());
-    assert_eq!(iter.next(), None);
-
-    // deletion
-    // db.remove(&k)?;
-
-    Ok(())
+#[derive(Serialize, Deserialize)]
+struct Collection {
+    key: String,
 }
-*/
 
 fn init_db() -> Result<Db> {
     let config: Config = Config::default()
@@ -50,6 +23,35 @@ fn init_db() -> Result<Db> {
         .cache_capacity(u64::MAX);
 
     config.open()
+}
+
+#[actix_web::post("/collections")]
+async fn create_collection(
+    json: web::Json<Collection>,
+    data: web::Data<Arc<AppData>>,
+) -> impl Responder {
+    let collections = data.db.get("collections").unwrap();
+    if let Some(value) = collections {
+        HttpResponse::Ok().body("something")
+    } else {
+        let collection = [json.into_inner()];
+        let serialized: String = serde_json::to_string(&collection).unwrap();
+        data.db.insert("collections", serialized.as_bytes()).unwrap();
+        HttpResponse::Ok().body(serialized)
+    }
+}
+
+#[actix_web::get("/collections")]
+async fn get_collections(data: web::Data<Arc<AppData>>) -> impl Responder {
+    // Get result
+    let result = data.db.get("collections").unwrap();
+    if let Some(value) = result {
+        // Send back the result
+        HttpResponse::Ok().body(value.to_vec())
+    } else {
+        // Not found
+        HttpResponse::NotFound().body("No collections in db")
+    }
 }
 
 #[actix_web::put("/{key}")]
