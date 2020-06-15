@@ -59,7 +59,7 @@ async fn create_or_update_value(
     body: Bytes,
 ) -> impl Responder {
     // Simply put stuff into DB
-    data.db.insert(key.clone(), body.as_ref()).unwrap();
+    data.db.insert(key.as_bytes(), body.as_ref()).unwrap();
     // Send back the body for confirmation
     HttpResponse::Ok().body(body)
 }
